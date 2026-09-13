@@ -33,7 +33,7 @@ def get_token():
         print("**********Successfully Logged In**********")
         login_json = login_response.json()
         token = login_json.get('token', "")
-        print("*********TOKEN CODE", token)
+        # print("*********TOKEN CODE", token)
 
     else:
         print("API Response : ", login_response.status_code)

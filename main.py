@@ -1,14 +1,170 @@
+import json
+from datetime import datetime, timedelta, timezone
+
 from get_api_through_token import get_token
+from get_bot_list import get_bot_list
+from get_historic_data import get_task_list
+
+
+def filter_activities(activities, hours=1, usernames=None):
+    """
+    Filter activities by:
+    - Last N hours
+    - Optional list of usernames
+
+    usernames=None -> all users
+    usernames=["woco108"] -> only woco108
+    usernames=["woco108", "john"] -> woco108 OR john
+    """
+
+    now = datetime.now(timezone.utc)
+    start_time = now - timedelta(hours=hours)
+
+    filtered = []
+
+    for activity in activities:
+
+        # -------------------------
+        # Username filter
+        # -------------------------
+        if usernames:
+            activity_username = activity.get("userName")
+
+            if activity_username not in usernames:
+                continue
+
+        # -------------------------
+        # Date filter
+        # -------------------------
+        end_date_time = activity.get("endDateTime")
+
+        if not end_date_time:
+            continue
+
+        try:
+            end_time = datetime.fromisoformat(
+                end_date_time.replace("Z", "+00:00")
+            )
+        except ValueError:
+            print(f"Invalid endDateTime: {end_date_time}")
+            continue
+
+        if start_time <= end_time <= now:
+            filtered.append(activity)
+
+    return filtered
+
+
+def print_summary(activities):
+
+    status_count = {}
+
+    for activity in activities:
+        status = activity.get("status", "UNKNOWN")
+
+        status_count[status] = (
+            status_count.get(status, 0) + 1
+        )
+
+    print("\n" + "=" * 40)
+    print("ACTIVITY SUMMARY")
+    print("=" * 40)
+
+    for status, count in status_count.items():
+        print(f"{status:<20}: {count}")
+
+    print("-" * 40)
+    print(f"{'TOTAL':<20}: {len(activities)}")
+    print("=" * 40)
 
 
 def main():
-    print("main function call")
-    # execution_data_main()
-    token_data = get_token()
-    print(token_data, "token data")
 
+    print("Main function called")
 
+    # --------------------------------
+    # Configuration
+    # --------------------------------
 
+    HOURS = 1
 
-if __name__=="__main__":
+    USERNAMES = [
+        "woco108",
+        "john",
+        "admin123"
+    ]
+
+    # --------------------------------
+    # Get token
+    # --------------------------------
+
+    token = get_token()
+    print(token)
+
+    # if not token:
+    #     print("Failed to get token.")
+    #     return
+    #
+    # # --------------------------------
+    # # Get activities
+    # # --------------------------------
+    #
+    # data = get_task_list(token)
+    #
+    # if not data:
+    #     print("No data received.")
+    #     return
+    #
+    # activities = data.get("list", [])
+    #
+    # print(
+    #     "Total activities received:",
+    #     len(activities)
+    # )
+    #
+    # # --------------------------------
+    # # Filter
+    # # --------------------------------
+    #
+    # filtered_activities = filter_activities(
+    #     activities,
+    #     hours=HOURS,
+    #     usernames=USERNAMES
+    # )
+    #
+    # print(
+    #     f"Activities in last {HOURS} hour(s): "
+    #     f"{len(filtered_activities)}"
+    # )
+    #
+    # print(
+    #     "Users:",
+    #     ", ".join(USERNAMES)
+    # )
+    #
+    # # --------------------------------
+    # # Summary
+    # # --------------------------------
+    #
+    # print_summary(filtered_activities)
+
+    data = get_bot_list(token)
+
+    if not data:
+        print("No bot data received")
+        return
+
+    # print(data)
+
+    # Save API response to JSON file
+    with open("bot_data.json", "w", encoding="utf-8") as file:
+        json.dump(
+            data,
+            file,
+            indent=4,
+            ensure_ascii=False
+        )
+
+    print("Bot data saved to bot_data.json")
+if __name__ == "__main__":
     main()
