@@ -1,6 +1,5 @@
-import json
+import os
 from datetime import datetime, timedelta, timezone
-
 from send_email.send_email import send_email_notification
 from get_token_from_api.get_api_through_token import get_token
 from historical_data_operation.get_historic_data import get_task_list
@@ -23,13 +22,11 @@ def filter_activities(activities, hours=1, usernames=None):
     filtered = []
 
     for activity in activities:
-
         # -------------------------
         # Username filter
         # -------------------------
         if usernames:
             activity_username = activity.get("userName")
-
             if activity_username not in usernames:
                 continue
 
@@ -51,7 +48,6 @@ def filter_activities(activities, hours=1, usernames=None):
 
         if start_time <= end_time <= now:
             filtered.append(activity)
-
     return filtered
 
 
@@ -78,109 +74,72 @@ def print_summary(activities):
     print("=" * 40)
 
 
-def historical_main(cloud_loginData):
-    print("Main function called")
+def historical_main(config_list):
+    all_filtered_activities_list = []
+    for base_cloud_login_data in config_list:
+        # --------------------------------
+        # Configuration
+        # --------------------------------
+        runner_list = [runner.strip() for runner in str(base_cloud_login_data.get("Historic_Runner_List", "")).split(",") if runner.strip()]
+        HOURS = 1
+        # --------------------------------
+        # Get token
+        # --------------------------------
 
-    # --------------------------------
-    # Configuration
-    # --------------------------------
+        token = get_token(base_cloud_login_data)
+        if not token:
+            print("Failed to get token.")
+            return
 
-    HOURS = 1
+        # --------------------------------
+        # Get activities
+        # --------------------------------
 
-    USERNAMES = ["woco101", "woco102", "woco103", "woco104", "woco105", "woco106", "woco107",
-     "woco108", "woco109", "woco110", "woco111", "woco112", "woco113", "woco114"]
+        data = get_task_list(token, base_cloud_login_data)
+        if not data:
+            print("No data received.")
+            return
 
-    # --------------------------------
-    # Get token
-    # --------------------------------
+        activities = data.get("list", [])
 
-    token = get_token()
-    print(token)
-
-    if not token:
-        print("Failed to get token.")
-        return
-
-    # --------------------------------
-    # Get activities
-    # --------------------------------
-
-    data = get_task_list(token)
-
-    if not data:
-        print("No data received.")
-        return
-
-    activities = data.get("list", [])
-
-    print(
-        "Total activities received:",
-        len(activities)
-    )
-
-    # --------------------------------
-    # Filter
-    # --------------------------------
-
-    filtered_activities = filter_activities(
-        activities,
-        hours=HOURS,
-        usernames=USERNAMES
-    )
-
-    # Save API response to JSON file
-    with open("bot_data.json", "w", encoding="utf-8") as file:
-        json.dump(
-            filtered_activities,
-            file,
-            indent=4,
-            ensure_ascii=False
+        print(
+            "Total activities received:",
+            len(activities)
         )
 
+        # --------------------------------
+        # Filter
+        # --------------------------------
+        filtered_activities = filter_activities(
+            activities,
+            hours=HOURS,
+            usernames=runner_list
+        )
+        all_filtered_activities_list = all_filtered_activities_list + filtered_activities
 
-    print(filtered_activities)
+
     email_data = {
-        "subject": "[Action Required] AA Production Bot Failures",
-        "activities": filtered_activities,
-        "total_count": len(filtered_activities)
+        "subject": (
+            f"[Action Required] AA Production Bot Failures"
+        ),
+        "email_title": "Automation Anywhere Monitoring Alert",
+        "environment_name": "Production",
+        "activities": all_filtered_activities_list,
+        "total_count": len(all_filtered_activities_list),
+        "mail_cc": os.getenv("CC_EMAIL", ""),
+        "sender_email": os.getenv("SENDER_EMAIL"),
+        "mail_to": os.getenv("RECEIVER_EMAIL")
     }
-    if len(filtered_activities) > 0:
-        send_email_notification(email_data)
+
+    if all_filtered_activities_list:
+        email_sent = send_email_notification(email_data)
+        if email_sent:
+            print("Failure notification sent successfully.")
+        else:
+            print("Failure notification could not be sent.")
 
     else:
-        print("")
+        print("No failed bot activities found. Email was not sent.")
 
-    # print(
-    #     f"Activities in last {HOURS} hour(s): "
-    #     f"{len(filtered_activities)}"
-    # )
-    #
-    # print(
-    #     "Users:",
-    #     ", ".join(USERNAMES)
-    # )
-    #
-    # # --------------------------------
-    # # Summary
-    # # --------------------------------
-    #
-    # print_summary(filtered_activities)
 
-    # data = get_bot_list(token)
-    #
-    # if not data:
-    #     print("No bot data received")
-    #     return
-    #
-    # # print(data)
-    #
-    # # Save API response to JSON file
-    # with open("bot_data.json", "w", encoding="utf-8") as file:
-    #     json.dump(
-    #         data,
-    #         file,
-    #         indent=4,
-    #         ensure_ascii=False
-    #     )
-    #
-    # print("Bot data saved to bot_data.json")
+
