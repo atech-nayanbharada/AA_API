@@ -1,15 +1,8 @@
 import os
-
 import requests
 
-from pathlib import Path
-
-BASE_DIR = Path(__file__).resolve().parent
-env_file = BASE_DIR / ".env.aa"
-
-
-def get_task_list(token):
-    base_url = os.getenv("base_url")
+def get_task_list(token, base_cloud_login_data):
+    base_url = base_cloud_login_data.get('AA_Base_URL','')
 
     url = f"{base_url}/v3/activity/list"
 
