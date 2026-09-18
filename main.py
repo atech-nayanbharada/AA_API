@@ -1,189 +1,83 @@
-import json
-from datetime import datetime, timedelta, timezone
+import os
+import pandas as pd
+from historical_data_operation.historic_main import historical_main
+from dotenv import load_dotenv
+from pathlib import Path
 
-from send_email import send_email_notification
-from get_api_through_token import get_token
-from get_bot_list import get_bot_list
-from get_historic_data import get_task_list
+BASE_DIR = Path(__file__).resolve().parent
+print(BASE_DIR,"BASE DIR")
+env_file = BASE_DIR / ".env"
 
 
-def filter_activities(activities, hours=1, usernames=None):
+from pathlib import Path
+import pandas as pd
+
+
+def read_aa_config(excel_input_path, excel_file_name):
     """
-    Filter activities by:
-    - Last N hours
-    - Optional list of usernames
-
-    usernames=None -> all users
-    usernames=["woco108"] -> only woco108
-    usernames=["woco108", "john"] -> woco108 OR john
+    Read AA configuration data from Excel and return a list of dictionaries.
     """
+    excel_file = Path(excel_input_path) / excel_file_name
 
-    now = datetime.now(timezone.utc)
-    start_time = now - timedelta(hours=hours)
+    if not excel_file.exists():
 
-    filtered = []
+        raise FileNotFoundError(f"File not found: {excel_file}")
 
-    for activity in activities:
+    df = pd.read_excel(excel_file, engine="openpyxl")
 
-        # -------------------------
-        # Username filter
-        # -------------------------
-        if usernames:
-            activity_username = activity.get("userName")
-
-            if activity_username not in usernames:
-                continue
-
-        # -------------------------
-        # Date filter
-        # -------------------------
-        end_date_time = activity.get("endDateTime")
-
-        if not end_date_time:
-            continue
-
-        try:
-            end_time = datetime.fromisoformat(
-                end_date_time.replace("Z", "+00:00")
-            )
-        except ValueError:
-            print(f"Invalid endDateTime: {end_date_time}")
-            continue
-
-        if start_time <= end_time <= now:
-            filtered.append(activity)
-
-    return filtered
-
-
-def print_summary(activities):
-
-    status_count = {}
-
-    for activity in activities:
-        status = activity.get("status", "UNKNOWN")
-
-        status_count[status] = (
-            status_count.get(status, 0) + 1
-        )
-
-    print("\n" + "=" * 40)
-    print("ACTIVITY SUMMARY")
-    print("=" * 40)
-
-    for status, count in status_count.items():
-        print(f"{status:<20}: {count}")
-
-    print("-" * 40)
-    print(f"{'TOTAL':<20}: {len(activities)}")
-    print("=" * 40)
+    return df.fillna("").to_dict(orient="records")
 
 
 def main():
-    print("Main function called")
+    loaded = load_dotenv(env_file)
+    excel_input_path = os.getenv("excel_input_path")
+    excel_file_name = os.getenv("excel_input_file_name")
 
-    # --------------------------------
-    # Configuration
-    # --------------------------------
+    # Full file path
+    excel_file = Path(excel_input_path) / excel_file_name
 
-    HOURS = 1
+    # excel_file = os.path.join(excel_input_path, excel_file_name)
+    print(excel_file, "excel filee")
+    # Read Excel
+    if excel_file.exists():
+        df = pd.read_excel(excel_file, engine="openpyxl")
 
-    USERNAMES = ["woco101", "woco102", "woco103", "woco104", "woco105", "woco106", "woco107",
-     "woco108", "woco109", "woco110", "woco111", "woco112", "woco113", "woco114"]
+        config_list = []
 
-    # --------------------------------
-    # Get token
-    # --------------------------------
+        for _, row in df.iterrows():
+            config_dict = {
+                "AA_Base_URL": row.get("AA_Base_URL",""),
+                "Username": row.get("Username",""),
+                "Password": row.get("Password",""),
+                "Historic_Runner_List": row.get("Historic_Runner_List","")
+            }
 
-    token = get_token()
-    print(token)
+            config_list.append(config_dict)
 
-    if not token:
-        print("Failed to get token.")
-        return
-
-    # --------------------------------
-    # Get activities
-    # --------------------------------
-
-    data = get_task_list(token)
-
-    if not data:
-        print("No data received.")
-        return
-
-    activities = data.get("list", [])
-
-    print(
-        "Total activities received:",
-        len(activities)
-    )
-
-    # --------------------------------
-    # Filter
-    # --------------------------------
-
-    filtered_activities = filter_activities(
-        activities,
-        hours=HOURS,
-        usernames=USERNAMES
-    )
-
-    # Save API response to JSON file
-    with open("bot_data.json", "w", encoding="utf-8") as file:
-        json.dump(
-            filtered_activities,
-            file,
-            indent=4,
-            ensure_ascii=False
-        )
+        print(config_list)
 
 
-    print(filtered_activities)
-    email_data = {
-        "subject": "[Action Required] AA Production Bot Failures",
-        "activities": filtered_activities,
-        "total_count": len(filtered_activities)
-    }
-    if len(filtered_activities) > 0:
-        send_email_notification(email_data)
-
+        print(f"Rows: {len(df)}")
     else:
-        print("")
+        print(f"File not found: {excel_file}")
 
-    # print(
-    #     f"Activities in last {HOURS} hour(s): "
-    #     f"{len(filtered_activities)}"
-    # )
-    #
-    # print(
-    #     "Users:",
-    #     ", ".join(USERNAMES)
-    # )
-    #
-    # # --------------------------------
-    # # Summary
-    # # --------------------------------
-    #
-    # print_summary(filtered_activities)
 
-    # data = get_bot_list(token)
-    #
-    # if not data:
-    #     print("No bot data received")
-    #     return
-    #
-    # # print(data)
-    #
-    # # Save API response to JSON file
-    # with open("bot_data.json", "w", encoding="utf-8") as file:
-    #     json.dump(
-    #         data,
-    #         file,
-    #         indent=4,
-    #         ensure_ascii=False
-    #     )
-    #
-    # print("Bot data saved to bot_data.json")
+    print(excel_input_path, "excel input type")
+
+    AA_BASE_URL = os.getenv("base_url")
+    AA_USERNAME = os.getenv("AA_USERNAME")
+    AA_PASSWORD = os.getenv("AA_PASSWORD")
+
+    cloud_loginData = {
+        "base_url": AA_BASE_URL,
+        "username": AA_USERNAME,
+        "password": AA_PASSWORD,
+        "multipleLogin": True
+    }
+    print("Historic main data started")
+
+    # historical_main(cloud_loginData)
+    print("Historic main data ended")
+
 if __name__ == "__main__":
     main()
